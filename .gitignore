@@ -1,0 +1,15 @@
+# .NET build output
+bin/
+obj/
+
+# SQLite database
+*.db
+*.db-shm
+*.db-wal
+
+# User-specific files
+*.user
+.vs/
+
+# Environment / secrets
+appsettings.Local.json
