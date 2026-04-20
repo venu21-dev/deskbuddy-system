@@ -9,4 +9,10 @@ public class AppDbContext : DbContext
 
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Device>().ToTable("Devices");
+        modelBuilder.Entity<CalendarEvent>().ToTable("CalendarEvents");
+    }
 }
