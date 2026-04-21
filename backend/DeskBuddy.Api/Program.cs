@@ -12,6 +12,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddScoped<IDeviceService, DeviceService>();
+builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
 
 var app = builder.Build();
 

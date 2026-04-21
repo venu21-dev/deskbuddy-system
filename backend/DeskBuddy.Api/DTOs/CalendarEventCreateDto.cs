@@ -1,18 +1,19 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace DeskBuddy.Api.DTOs;
 
-public class NowNextDto
+public class CalendarEventCreateDto
 {
-    public CalendarEventDto? Now { get; set; }
-    public CalendarEventDto? Next { get; set; }
-}
-
-public class CalendarEventDto
-{
-    public int Id { get; set; }
+    [Required]
+    [MaxLength(200)]
     public string Title { get; set; } = string.Empty;
+
+    [Required]
     public DateTime StartTime { get; set; }
+
+    [Required]
     public DateTime EndTime { get; set; }
+
     public string? Location { get; set; }
     public string? Description { get; set; }
-    public string? GoogleEventId { get; set; }
 }
