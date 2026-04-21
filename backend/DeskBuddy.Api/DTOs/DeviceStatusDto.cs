@@ -1,5 +1,6 @@
 namespace DeskBuddy.Api.DTOs;
 
+/// <summary>DTO returned by the API for device data. Never exposes the internal ApiKey.</summary>
 public class DeviceStatusDto
 {
     public int Id { get; set; }

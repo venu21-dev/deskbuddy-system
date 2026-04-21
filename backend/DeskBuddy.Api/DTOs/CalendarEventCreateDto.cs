@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DeskBuddy.Api.DTOs;
 
+/// <summary>DTO for creating a calendar event manually. POST /api/calendarevents.</summary>
 public class CalendarEventCreateDto
 {
     [Required]

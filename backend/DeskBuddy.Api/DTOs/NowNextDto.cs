@@ -1,5 +1,6 @@
 namespace DeskBuddy.Api.DTOs;
 
+/// <summary>DTO returned for the Now/Next endpoint used by the ESP32 device.</summary>
 public class NowNextDto
 {
     public CalendarEventDto? Now { get; set; }

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DeskBuddy.Api.DTOs;
 
+/// <summary>DTO for updating a calendar event. PUT /api/calendarevents/{id}.</summary>
 public class CalendarEventUpdateDto
 {
     [Required]

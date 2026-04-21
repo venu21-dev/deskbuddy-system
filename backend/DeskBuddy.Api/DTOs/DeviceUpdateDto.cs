@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DeskBuddy.Api.DTOs;
 
+/// <summary>DTO for updating an existing device. Sent by client in PUT /api/devices/{id}.</summary>
 public class DeviceUpdateDto
 {
     [Required]
