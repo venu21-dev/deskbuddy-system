@@ -6,5 +6,7 @@ public interface IDeviceService
 {
     Task<IEnumerable<DeviceStatusDto>> GetAllAsync();
     Task<DeviceStatusDto?> GetByIdAsync(int id);
-    Task UpdateStatusAsync(int id, DeviceStatusDto dto);
+    Task<DeviceStatusDto> CreateAsync(DeviceCreateDto dto);
+    Task<bool> UpdateAsync(int id, DeviceUpdateDto dto);
+    Task<bool> DeleteAsync(int id);
 }

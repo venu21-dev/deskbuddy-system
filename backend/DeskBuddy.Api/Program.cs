@@ -1,4 +1,5 @@
 using DeskBuddy.Api.Data;
+using DeskBuddy.Api.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -9,6 +10,8 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IDeviceService, DeviceService>();
 
 var app = builder.Build();
 
