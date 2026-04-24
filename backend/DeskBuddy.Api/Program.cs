@@ -28,6 +28,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddScoped<ICalendarEventService, CalendarEventService>();
+builder.Services.AddScoped<IGoogleCalendarService, GoogleCalendarService>();
 
 var app = builder.Build();
 
