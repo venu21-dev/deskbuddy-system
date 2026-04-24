@@ -13,3 +13,4 @@ obj/
 
 # Environment / secrets
 appsettings.Local.json
+backend/DeskBuddy.Api/Secrets/
