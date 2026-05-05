@@ -1,5 +1,6 @@
 using DeskBuddy.Api.DTOs;
 using DeskBuddy.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DeskBuddy.Api.Controllers;
@@ -25,5 +26,14 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "Invalid username or password." });
 
         return Ok(result);
+    }
+
+    /// <summary>Returns the current logged-in admin. Requires a valid JWT token.</summary>
+    [Authorize]
+    [HttpGet("me")]
+    public IActionResult Me()
+    {
+        var username = User.Identity?.Name;
+        return Ok(new { username, role = "Admin" });
     }
 }

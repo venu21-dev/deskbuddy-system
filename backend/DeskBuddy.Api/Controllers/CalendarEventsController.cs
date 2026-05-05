@@ -1,9 +1,11 @@
 using DeskBuddy.Api.DTOs;
 using DeskBuddy.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DeskBuddy.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class CalendarEventsController : ControllerBase
