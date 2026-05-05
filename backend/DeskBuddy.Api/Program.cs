@@ -81,6 +81,23 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<DeskBuddy.Api.Data.AppDbContext>();
+    db.Database.Migrate();
+
+    if (!db.Users.Any())
+    {
+        db.Users.Add(new DeskBuddy.Api.Models.User
+        {
+            Username = app.Configuration["Admin:Username"]!,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(app.Configuration["Admin:Password"]!),
+            Role = "Admin"
+        });
+        db.SaveChanges();
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

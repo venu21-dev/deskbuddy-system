@@ -1,7 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using DeskBuddy.Api.Data;
 using DeskBuddy.Api.DTOs;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace DeskBuddy.Api.Services;
@@ -9,25 +11,25 @@ namespace DeskBuddy.Api.Services;
 public class AuthService : IAuthService
 {
     private readonly IConfiguration _config;
+    private readonly AppDbContext _db;
 
-    public AuthService(IConfiguration config)
+    public AuthService(IConfiguration config, AppDbContext db)
     {
         _config = config;
+        _db = db;
     }
 
-    public LoginResponseDto? Login(LoginRequestDto request)
+    public async Task<LoginResponseDto?> LoginAsync(LoginRequestDto request)
     {
-        var expectedUsername = _config["Admin:Username"];
-        var expectedPassword = _config["Admin:Password"];
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
 
-        if (request.Username != expectedUsername || request.Password != expectedPassword)
+        if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
 
-        var token = GenerateToken(request.Username);
-        return token;
+        return GenerateToken(user.Username, user.Role);
     }
 
-    private LoginResponseDto GenerateToken(string username)
+    private LoginResponseDto GenerateToken(string username, string role)
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -38,7 +40,7 @@ public class AuthService : IAuthService
         {
             new Claim(JwtRegisteredClaimNames.Sub, username),
             new Claim(ClaimTypes.Name, username),
-            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(ClaimTypes.Role, role),
         };
 
         var token = new JwtSecurityToken(

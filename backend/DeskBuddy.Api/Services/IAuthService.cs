@@ -4,5 +4,5 @@ namespace DeskBuddy.Api.Services;
 
 public interface IAuthService
 {
-    LoginResponseDto? Login(LoginRequestDto request);
+    Task<LoginResponseDto?> LoginAsync(LoginRequestDto request);
 }

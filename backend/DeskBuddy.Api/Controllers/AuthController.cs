@@ -18,9 +18,9 @@ public class AuthController : ControllerBase
 
     /// <summary>Admin login. Returns a JWT token on success.</summary>
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequestDto request)
+    public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
     {
-        var result = _authService.Login(request);
+        var result = await _authService.LoginAsync(request);
 
         if (result is null)
             return Unauthorized(new { message = "Invalid username or password." });
