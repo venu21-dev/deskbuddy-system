@@ -1,8 +1,10 @@
+using DeskBuddy.Api.Filters;
 using DeskBuddy.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DeskBuddy.Api.Controllers;
 
+[ApiKeyAuth]
 [ApiController]
 [Route("api/[controller]")]
 public class NowNextController : ControllerBase
