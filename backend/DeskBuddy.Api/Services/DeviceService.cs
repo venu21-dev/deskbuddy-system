@@ -8,15 +8,18 @@ namespace DeskBuddy.Api.Services;
 public class DeviceService : IDeviceService
 {
     private readonly AppDbContext _db;
+    private readonly int _offlineAfterMinutes;
 
-    public DeviceService(AppDbContext db)
+    public DeviceService(AppDbContext db, IConfiguration config)
     {
         _db = db;
+        _offlineAfterMinutes = int.Parse(config["Device:OfflineAfterMinutes"] ?? "2");
     }
 
     public async Task<IEnumerable<DeviceStatusDto>> GetAllAsync()
     {
-        return await _db.Devices.Select(d => ToDto(d)).ToListAsync();
+        var devices = await _db.Devices.ToListAsync();
+        return devices.Select(d => ToDto(d));
     }
 
     public async Task<DeviceStatusDto?> GetByIdAsync(int id)
@@ -81,11 +84,11 @@ public class DeviceService : IDeviceService
         return true;
     }
 
-    private static DeviceStatusDto ToDto(Device d) => new()
+    private DeviceStatusDto ToDto(Device d) => new()
     {
         Id = d.Id,
         Name = d.Name,
-        IsOnline = d.LastSeen > DateTime.UtcNow.AddMinutes(-2),
+        IsOnline = d.LastSeen > DateTime.UtcNow.AddMinutes(-_offlineAfterMinutes),
         BatteryLevel = d.BatteryLevel,
         Mood = d.Mood,
         Mode = d.Mode,
