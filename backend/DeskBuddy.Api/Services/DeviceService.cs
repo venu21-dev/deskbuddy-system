@@ -85,7 +85,7 @@ public class DeviceService : IDeviceService
     {
         Id = d.Id,
         Name = d.Name,
-        IsOnline = d.IsOnline,
+        IsOnline = d.LastSeen > DateTime.UtcNow.AddMinutes(-2),
         BatteryLevel = d.BatteryLevel,
         Mood = d.Mood,
         Mode = d.Mode,
