@@ -66,6 +66,21 @@ public class DeviceService : IDeviceService
         return true;
     }
 
+    public async Task<bool> HeartbeatAsync(int id, HeartbeatRequestDto dto)
+    {
+        var device = await _db.Devices.FindAsync(id);
+        if (device is null) return false;
+
+        device.IsOnline = true;
+        device.BatteryLevel = dto.BatteryLevel;
+        device.Mood = dto.Mood;
+        device.Mode = dto.Mode;
+        device.LastSeen = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
     private static DeviceStatusDto ToDto(Device d) => new()
     {
         Id = d.Id,

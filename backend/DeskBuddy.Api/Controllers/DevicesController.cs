@@ -1,4 +1,5 @@
 using DeskBuddy.Api.DTOs;
+using DeskBuddy.Api.Filters;
 using DeskBuddy.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,5 +54,15 @@ public class DevicesController : ControllerBase
         var success = await _service.DeleteAsync(id);
         if (!success) return NotFound();
         return NoContent();
+    }
+
+    [ApiKeyAuth]
+    [AllowAnonymous]
+    [HttpPost("{id}/heartbeat")]
+    public async Task<IActionResult> Heartbeat(int id, [FromBody] HeartbeatRequestDto dto)
+    {
+        var success = await _service.HeartbeatAsync(id, dto);
+        if (!success) return NotFound(new { message = $"Device {id} not found." });
+        return Ok(new { message = "Heartbeat received.", deviceId = id, lastSeen = DateTime.UtcNow });
     }
 }
