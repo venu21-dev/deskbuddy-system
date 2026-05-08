@@ -19,21 +19,15 @@ export function DeskBuddyPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    api.getDevices()
-      .then((devices) => {
-        if (devices.length > 0) {
-          return api.getDeviceStatus(devices[0].id);
-        }
-        return null;
-      })
-      .then((status) => {
-        setDevice(status);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    const load = () =>
+      api.getDevices()
+        .then((devices) => devices.length > 0 ? api.getDeviceStatus(devices[0].id) : null)
+        .then((status) => { setDevice(status); setLoading(false); })
+        .catch((err) => { setError(err.message); setLoading(false); });
+
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => clearInterval(timer);
   }, []);
 
   if (loading) return <p className="text-white/60">Loading DeskBuddy...</p>;
