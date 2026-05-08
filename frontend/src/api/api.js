@@ -12,6 +12,11 @@ function authHeaders() {
 }
 
 async function handleResponse(res) {
+  if (res.status === 401) {
+    localStorage.removeItem("token");
+    window.location.reload();
+    return;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.message || `HTTP ${res.status}`);
