@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clock3, Monitor } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
-import { fakeApi } from "../api/fakeApi";
+import { api } from "../api/api";
 
 function TinyBars() {
   const heights = [28, 44, 35, 60, 52, 40, 74, 68, 54, 62, 46, 70];
@@ -19,17 +19,33 @@ function TinyBars() {
 }
 
 export function DashboardPage() {
-  const [data, setData] = useState(null);
+  const [device, setDevice] = useState(null);
+  const [nowNext, setNowNext] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [clock, setClock] = useState(new Date());
 
   useEffect(() => {
-    fakeApi.getDashboard().then((result) => {
-      setData(result);
-      setLoading(false);
-    });
+    const timer = setInterval(() => setClock(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      api.getDevices().then((d) => d.length > 0 ? api.getDeviceStatus(d[0].id) : null),
+      api.getNowNext().catch(() => null),
+    ])
+      .then(([dev, nn]) => {
+        setDevice(dev);
+        setNowNext(nn);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
 
   if (loading) return <p className="text-white/60">Loading dashboard...</p>;
+
+  const timeStr = clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateStr = clock.toLocaleDateString([], { day: "numeric", month: "long" });
 
   return (
     <div className="space-y-6">
@@ -41,9 +57,9 @@ export function DashboardPage() {
         <div className="flex flex-col items-start xl:items-end">
           <div className="flex items-center gap-3 text-white/90">
             <Clock3 className="h-5 w-5 text-white/50" />
-            <span className="text-4xl font-light">11:37 AM</span>
+            <span className="text-4xl font-light">{timeStr}</span>
           </div>
-          <p className="mt-2 text-xl text-white/70">9 September</p>
+          <p className="mt-2 text-xl text-white/70">{dateStr}</p>
         </div>
       </div>
 
@@ -64,19 +80,21 @@ export function DashboardPage() {
               <div>
                 <p className="text-sm text-white/45">Battery</p>
                 <TinyBars />
-                <p className="mt-4 text-5xl font-light">{data.battery}%</p>
+                <p className="mt-4 text-5xl font-light">{device?.batteryLevel ?? "--"}%</p>
                 <p className="text-sm text-white/40">Current battery status from device</p>
               </div>
               <div>
                 <p className="text-sm text-white/45">Status</p>
                 <TinyBars />
-                <p className="mt-4 text-5xl font-light">Online</p>
+                <p className="mt-4 text-5xl font-light">
+                  {device ? (device.isOnline ? "Online" : "Offline") : "--"}
+                </p>
                 <p className="text-sm text-white/40">API + device connectivity</p>
               </div>
               <div>
                 <p className="text-sm text-white/45">Mood</p>
                 <TinyBars />
-                <p className="mt-4 text-5xl font-light">{data.mood}</p>
+                <p className="mt-4 text-5xl font-light">{device?.mood ?? "--"}</p>
                 <p className="text-sm text-white/40">Mood sent from ESP32</p>
               </div>
             </div>
@@ -183,29 +201,36 @@ export function DashboardPage() {
         {/* Now / Next */}
         <Card className="xl:col-span-6 bg-[#d9dfd2] text-black border-none">
           <CardContent className="p-6 min-h-[220px] flex flex-col justify-between">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-2xl font-medium">Now / Next Event</p>
-                <p className="mt-2 text-sm text-black/55">Current calendar processing</p>
-              </div>
-              <button className="rounded-full border border-black/15 px-4 py-2 text-sm text-black/80">Change</button>
+            <div>
+              <p className="text-2xl font-medium">Now / Next Event</p>
+              <p className="mt-2 text-sm text-black/55">Current calendar processing</p>
             </div>
-            <div className="mt-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-              <div>
-                <p className="text-sm text-black/55">Current Event Progress</p>
-                <p className="mt-2 text-6xl font-light">47%</p>
-                <p className="text-sm text-black/50">11AM — 3PM</p>
+            <div className="mt-6 flex flex-col lg:flex-row gap-6">
+              <div className="flex-1 rounded-[20px] bg-black/10 p-4">
+                <p className="text-xs uppercase tracking-widest text-black/50">Now</p>
+                <p className="mt-2 text-xl font-medium">
+                  {nowNext?.now?.title ?? "No current event"}
+                </p>
+                {nowNext?.now && (
+                  <p className="mt-1 text-sm text-black/55">
+                    {new Date(nowNext.now.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {" — "}
+                    {new Date(nowNext.now.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </div>
-              <div className="flex-1">
-                <div className="relative h-16 flex items-center justify-between">
-                  <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-black/20" />
-                  {["11AM", "11AM", "12PM", "1PM", "2PM", "3PM", "4PM"].map((time, index) => (
-                    <div key={index} className="relative flex flex-col items-center gap-3">
-                      <div className={`h-6 w-6 rounded-full border ${index > 0 && index < 6 ? "bg-black border-black" : "bg-transparent border-black/35"}`} />
-                      <span className="text-xs text-black/55">{time}</span>
-                    </div>
-                  ))}
-                </div>
+              <div className="flex-1 rounded-[20px] bg-black/5 p-4">
+                <p className="text-xs uppercase tracking-widest text-black/50">Next</p>
+                <p className="mt-2 text-xl font-medium">
+                  {nowNext?.next?.title ?? "No upcoming event"}
+                </p>
+                {nowNext?.next && (
+                  <p className="mt-1 text-sm text-black/55">
+                    {new Date(nowNext.next.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {" — "}
+                    {new Date(nowNext.next.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </div>
             </div>
           </CardContent>
