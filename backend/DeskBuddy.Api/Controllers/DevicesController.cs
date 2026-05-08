@@ -33,6 +33,14 @@ public class DevicesController : ControllerBase
         return Ok(device);
     }
 
+    [HttpGet("{id}/status")]
+    public async Task<IActionResult> GetStatus(int id)
+    {
+        var status = await _service.GetStatusAsync(id);
+        if (status is null) return NotFound();
+        return Ok(status);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(DeviceCreateDto dto)
     {

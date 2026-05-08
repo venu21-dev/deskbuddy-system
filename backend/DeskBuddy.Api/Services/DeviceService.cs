@@ -69,6 +69,28 @@ public class DeviceService : IDeviceService
         return true;
     }
 
+    public async Task<DeviceStatusDetailDto?> GetStatusAsync(int id)
+    {
+        var device = await _db.Devices.FindAsync(id);
+        if (device is null) return null;
+
+        var isOnline = device.LastSeen > DateTime.UtcNow.AddMinutes(-_offlineAfterMinutes);
+        var minutesSince = (int)(DateTime.UtcNow - device.LastSeen).TotalMinutes;
+
+        return new DeviceStatusDetailDto
+        {
+            Id = device.Id,
+            Name = device.Name,
+            IsOnline = isOnline,
+            StatusText = isOnline ? "Online" : "Offline",
+            BatteryLevel = device.BatteryLevel,
+            Mood = device.Mood,
+            Mode = device.Mode,
+            LastSeen = device.LastSeen,
+            MinutesSinceLastSeen = minutesSince < 0 ? 0 : minutesSince
+        };
+    }
+
     public async Task<bool> HeartbeatAsync(int id, HeartbeatRequestDto dto)
     {
         var device = await _db.Devices.FindAsync(id);

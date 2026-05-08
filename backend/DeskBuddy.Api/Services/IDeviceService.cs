@@ -10,4 +10,5 @@ public interface IDeviceService
     Task<bool> UpdateAsync(int id, DeviceUpdateDto dto);
     Task<bool> DeleteAsync(int id);
     Task<bool> HeartbeatAsync(int id, HeartbeatRequestDto dto);
+    Task<DeviceStatusDetailDto?> GetStatusAsync(int id);
 }
