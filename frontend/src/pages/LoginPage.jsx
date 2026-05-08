@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { fakeApi } from "../api/fakeApi";
+import { api } from "../api/api";
 
 export function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("admin");
@@ -14,7 +14,7 @@ export function LoginPage({ onLogin }) {
     setError("");
     setLoading(true);
     try {
-      const result = await fakeApi.login(username, password);
+      const result = await api.login(username, password);
       onLogin(result);
     } catch (err) {
       setError(err.message);

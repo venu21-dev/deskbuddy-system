@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { api } from "./api/api";
 import { Shell } from "./components/layout/Shell";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -11,6 +12,7 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState("dashboard");
 
   const handleLogout = () => {
+    api.logout();
     setUser(null);
     setCurrentPage("dashboard");
   };
