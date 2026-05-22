@@ -61,6 +61,7 @@ builder.Services.AddScoped<IGoogleCalendarService, GoogleCalendarService>();
 builder.Services.AddScoped<INowNextService, NowNextService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DeskBuddy.Api.Filters.ApiKeyAuthFilter>();
+builder.Services.AddHostedService<CalendarSyncBackgroundService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

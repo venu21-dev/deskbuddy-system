@@ -2,27 +2,23 @@ import { useEffect, useState } from "react";
 import { api } from "../api/api";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DATES = Array.from({ length: 31 }, (_, i) => i + 1);
 
 function formatTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 export function CalendarPage() {
+  const today = new Date();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const firstDayOffset = new Date(today.getFullYear(), today.getMonth(), 1).getDay();
+
   const [nowNext, setNowNext] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   useEffect(() => {
     api.getNowNext()
-      .then((data) => {
-        setNowNext(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
+      .then((data) => { setNowNext(data); setLoading(false); })
+      .catch((err) => { setError(err.message); setLoading(false); });
   }, []);
 
   if (loading) return <p className="text-white/60">Loading calendar...</p>;
@@ -58,10 +54,13 @@ export function CalendarPage() {
             ))}
           </div>
           <div className="grid grid-cols-7 gap-2">
-            {DATES.map((d) => (
+            {Array.from({ length: firstDayOffset }).map((_, i) => (
+              <div key={`empty-${i}`} />
+            ))}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
               <button
                 key={d}
-                className={`h-9 rounded-full text-sm ${d === new Date().getDate() ? "bg-black text-white" : "hover:bg-black/10"}`}
+                className={`h-9 rounded-full text-sm ${d === today.getDate() ? "bg-black text-white" : "hover:bg-black/10"}`}
               >
                 {d}
               </button>

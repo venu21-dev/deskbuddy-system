@@ -3,6 +3,31 @@ import { Clock3, Monitor } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
 import { api } from "../api/api";
 
+function fmtTime(iso) {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function calcEventProgress(event) {
+  const start = new Date(event.startTime).getTime();
+  const end = new Date(event.endTime).getTime();
+  const now = Date.now();
+  if (now <= start) return 0;
+  if (now >= end) return 100;
+  return Math.round(((now - start) / (end - start)) * 100);
+}
+
+function buildTimeSlots(event) {
+  if (!event) return ["–", "–", "–", "–", "–", "–", "–"];
+  const slots = [];
+  const cursor = new Date(event.startTime);
+  const end = new Date(event.endTime);
+  while (cursor <= end) {
+    slots.push(fmtTime(cursor.toISOString()));
+    cursor.setHours(cursor.getHours() + 1);
+  }
+  return slots.length >= 2 ? slots : [...slots, ...Array(2 - slots.length).fill("–")];
+}
+
 function TinyBars() {
   const heights = [28, 44, 35, 60, 52, 40, 74, 68, 54, 62, 46, 70];
   return (
@@ -10,7 +35,7 @@ function TinyBars() {
       {heights.map((h, i) => (
         <div
           key={i}
-          className={`w-2 rounded-full ${i > 7 ? "bg-white" : "bg-white/12"}`}
+          className={`w-2 rounded-full ${i > 7 ? "bg-white" : "bg-white/20"}`}
           style={{ height: `${h}px` }}
         />
       ))}
@@ -201,36 +226,37 @@ export function DashboardPage() {
         {/* Now / Next */}
         <Card className="xl:col-span-6 bg-[#d9dfd2] text-black border-none">
           <CardContent className="p-6 min-h-[220px] flex flex-col justify-between">
-            <div>
-              <p className="text-2xl font-medium">Now / Next Event</p>
-              <p className="mt-2 text-sm text-black/55">Current calendar processing</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-2xl font-medium">Now / Next Event</p>
+                <p className="mt-2 text-sm text-black/55">Current calendar processing</p>
+              </div>
+              <button className="rounded-full border border-black/15 px-4 py-2 text-sm text-black/80">Change</button>
             </div>
-            <div className="mt-6 flex flex-col lg:flex-row gap-6">
-              <div className="flex-1 rounded-[20px] bg-black/10 p-4">
-                <p className="text-xs uppercase tracking-widest text-black/50">Now</p>
-                <p className="mt-2 text-xl font-medium">
-                  {nowNext?.now?.title ?? "No current event"}
-                </p>
-                {nowNext?.now && (
-                  <p className="mt-1 text-sm text-black/55">
-                    {new Date(nowNext.now.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    {" — "}
-                    {new Date(nowNext.now.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
+            <div className="mt-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <div>
+                <p className="text-sm text-black/55">Current Event Progress</p>
+                {nowNext?.now ? (
+                  <>
+                    <p className="mt-2 text-6xl font-light">{calcEventProgress(nowNext.now)}%</p>
+                    <p className="text-sm text-black/50">
+                      {fmtTime(nowNext.now.startTime)} — {fmtTime(nowNext.now.endTime)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-2xl font-medium text-black/45">No current event</p>
                 )}
               </div>
-              <div className="flex-1 rounded-[20px] bg-black/5 p-4">
-                <p className="text-xs uppercase tracking-widest text-black/50">Next</p>
-                <p className="mt-2 text-xl font-medium">
-                  {nowNext?.next?.title ?? "No upcoming event"}
-                </p>
-                {nowNext?.next && (
-                  <p className="mt-1 text-sm text-black/55">
-                    {new Date(nowNext.next.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    {" — "}
-                    {new Date(nowNext.next.endTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                )}
+              <div className="flex-1">
+                <div className="relative h-16 flex items-center justify-between">
+                  <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-black/20" />
+                  {buildTimeSlots(nowNext?.now).map((label, index, arr) => (
+                    <div key={index} className="relative flex flex-col items-center gap-3">
+                      <div className={`h-6 w-6 rounded-full border ${index > 0 && index < arr.length - 1 ? "bg-black border-black" : "bg-transparent border-black/35"}`} />
+                      <span className="text-xs text-black/55">{label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </CardContent>
