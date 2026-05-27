@@ -15,7 +15,7 @@ public class NowNextService : INowNextService
 
     public async Task<NowNextDto> GetNowNextAsync()
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now;
 
         var upcoming = await _db.CalendarEvents
             .Where(e => e.EndTime > now)
