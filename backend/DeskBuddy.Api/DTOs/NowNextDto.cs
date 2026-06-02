@@ -5,6 +5,7 @@ public class NowNextDto
 {
     public CalendarEventDto? Now { get; set; }
     public CalendarEventDto? Next { get; set; }
+    public int TodayEventCount { get; set; }
 }
 
 public class CalendarEventDto

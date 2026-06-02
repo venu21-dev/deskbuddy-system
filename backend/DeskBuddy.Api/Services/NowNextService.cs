@@ -29,8 +29,14 @@ public class NowNextService : INowNextService
         // Next: first event that starts in the future
         var nextEvent = upcoming.FirstOrDefault(e => e.StartTime > now);
 
+        var todayStart = now.Date;
+        var todayEnd = todayStart.AddDays(1);
+        var todayCount = await _db.CalendarEvents
+            .CountAsync(e => e.StartTime >= todayStart && e.StartTime < todayEnd);
+
         return new NowNextDto
         {
+            TodayEventCount = todayCount,
             Now = nowEvent is null ? null : new CalendarEventDto
             {
                 Id = nowEvent.Id,

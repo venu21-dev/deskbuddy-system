@@ -51,24 +51,22 @@ public class GoogleCalendarService : IGoogleCalendarService
     {
         var events = await GetUpcomingEventsAsync();
 
+        // Full replace: clear everything and re-insert from Google
+        var all = await _db.CalendarEvents.ToListAsync();
+        _db.CalendarEvents.RemoveRange(all);
+
         foreach (var ev in events)
         {
-            var exists = await _db.CalendarEvents
-                .AnyAsync(e => e.GoogleEventId == ev.GoogleEventId);
-
-            if (!exists)
+            _db.CalendarEvents.Add(new CalendarEvent
             {
-                _db.CalendarEvents.Add(new CalendarEvent
-                {
-                    GoogleEventId = ev.GoogleEventId ?? string.Empty,
-                    Title = ev.Title,
-                    StartTime = ev.StartTime,
-                    EndTime = ev.EndTime,
-                    Location = ev.Location,
-                    Description = ev.Description,
-                    FetchedAt = DateTime.UtcNow
-                });
-            }
+                GoogleEventId = ev.GoogleEventId ?? string.Empty,
+                Title = ev.Title,
+                StartTime = ev.StartTime,
+                EndTime = ev.EndTime,
+                Location = ev.Location,
+                Description = ev.Description,
+                FetchedAt = DateTime.UtcNow
+            });
         }
 
         await _db.SaveChangesAsync();
