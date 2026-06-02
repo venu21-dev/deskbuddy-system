@@ -14,3 +14,6 @@ obj/
 # Environment / secrets
 appsettings.Local.json
 backend/DeskBuddy.Api/Secrets/
+
+# ESP32 device firmware (contains WiFi password + API key)
+device/
