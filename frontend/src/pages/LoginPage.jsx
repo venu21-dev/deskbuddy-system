@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { api } from "../api/api";
+import { client } from "../api/client";
 
 export function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("admin");
@@ -14,10 +14,10 @@ export function LoginPage({ onLogin }) {
     setError("");
     setLoading(true);
     try {
-      const result = await api.login(username, password);
+      const result = await client.login(username, password);
       onLogin(result);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Login failed. Check your credentials.");
     } finally {
       setLoading(false);
     }

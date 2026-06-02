@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Clock3, Monitor } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
-import { api } from "../api/api";
+import { client, DEVICE_ID } from "../api/client";
+
+const POLL_MS = 30_000;
 
 function fmtTime(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -28,6 +30,45 @@ function buildTimeSlots(event) {
   return slots.length >= 2 ? slots : [...slots, ...Array(2 - slots.length).fill("–")];
 }
 
+/**
+ * Build weekly activity bars from real calendar events.
+ * For each day of the current week, count how many minutes of events exist.
+ */
+function buildWeeklyActivity(events) {
+  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const now = new Date();
+  // Find Monday of current week
+  const dayOfWeek = now.getDay(); // 0=Sun
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+  monday.setHours(0, 0, 0, 0);
+
+  const result = [];
+  for (let i = 0; i < 7; i++) {
+    const dayStart = new Date(monday);
+    dayStart.setDate(monday.getDate() + i);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setDate(dayStart.getDate() + 1);
+
+    // Count total event minutes for this day
+    let totalMinutes = 0;
+    (events || []).forEach((ev) => {
+      const evStart = new Date(ev.startTime);
+      const evEnd = new Date(ev.endTime);
+      if (evEnd > dayStart && evStart < dayEnd) {
+        const overlapStart = Math.max(evStart.getTime(), dayStart.getTime());
+        const overlapEnd = Math.min(evEnd.getTime(), dayEnd.getTime());
+        totalMinutes += Math.round((overlapEnd - overlapStart) / 60000);
+      }
+    });
+
+    const dayIndex = (dayStart.getDay() + 6) % 7; // 0=Mon, 6=Sun
+    const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    result.push({ day: DAY_LABELS[dayIndex], minutes: totalMinutes });
+  }
+  return result;
+}
+
 function TinyBars() {
   const heights = [28, 44, 35, 60, 52, 40, 74, 68, 54, 62, 46, 70];
   return (
@@ -46,34 +87,61 @@ function TinyBars() {
 export function DashboardPage() {
   const [device, setDevice] = useState(null);
   const [nowNext, setNowNext] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [clock, setClock] = useState(new Date());
 
+  // Clock tick every minute
   useEffect(() => {
     const timer = setInterval(() => setClock(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    Promise.all([
-      api.getDevices().then((d) => d.length > 0 ? api.getDeviceStatus(d[0].id) : null),
-      api.getNowNext().catch(() => null),
-    ])
-      .then(([dev, nn]) => {
-        setDevice(dev);
-        setNowNext(nn);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+  const fetchData = useCallback(async () => {
+    try {
+      const [dev, nn, evts, healthData] = await Promise.all([
+        client.getDeviceStatus(DEVICE_ID).catch(() => null),
+        client.getNowNext().catch(() => null),
+        client.getCalendarEvents().catch(() => []),
+        client.getHealth().catch(() => null),
+      ]);
+      setDevice(dev);
+      setNowNext(nn);
+      setEvents(Array.isArray(evts) ? evts : []);
+      setHealth(healthData);
+      setError("");
+    } catch (err) {
+      setError(err.message || "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Initial load + polling every 30 seconds
+  useEffect(() => {
+    fetchData();
+    const timer = setInterval(fetchData, POLL_MS);
+    return () => clearInterval(timer);
+  }, [fetchData]);
 
   if (loading) return <p className="text-white/60">Loading dashboard...</p>;
 
   const timeStr = clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const dateStr = clock.toLocaleDateString([], { day: "numeric", month: "long" });
 
+  const weeklyData = buildWeeklyActivity(events);
+  const maxMinutes = Math.max(...weeklyData.map((d) => d.minutes), 1);
+
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-sm uppercase tracking-[0.25em] text-white/35">Overview</p>
@@ -95,10 +163,13 @@ export function DashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-2xl font-medium">Device Overview</p>
-                <p className="mt-2 text-sm text-white/45">Real-time device data from your ESP32</p>
+                <p className="mt-2 text-sm text-white/45">Real-time device data from ESP32 (ID: {DEVICE_ID})</p>
               </div>
-              <button className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white hover:text-black transition">
-                Live data
+              <button
+                onClick={fetchData}
+                className="rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 hover:bg-white hover:text-black transition"
+              >
+                Refresh
               </button>
             </div>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -134,9 +205,6 @@ export function DashboardPage() {
                 <p className="text-2xl font-medium">Connection</p>
                 <p className="mt-2 text-sm text-white/45">Backend ↔ ESP32 communication</p>
               </div>
-              <div className="h-7 w-12 rounded-full bg-[#d9dfd2] p-1 flex items-center justify-end">
-                <div className="h-5 w-5 rounded-full bg-[#0b0c0d]" />
-              </div>
             </div>
             <div className="my-6 flex-1 rounded-[24px] border border-[#93ff7a]/10 bg-[radial-gradient(circle_at_center,rgba(152,255,152,0.18),transparent_65%)] flex items-center justify-center">
               <div className="h-40 w-40 rounded-[28px] border border-white/10 bg-white/[0.03] flex items-center justify-center">
@@ -146,10 +214,15 @@ export function DashboardPage() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <p className="text-sm text-white/45">API Health</p>
-                <p className="mt-2 text-3xl font-light">83%</p>
+                <p className="mt-2 text-3xl font-light">
+                  {health ? "OK" : device ? "OK" : "--"}
+                </p>
               </div>
               <div className="w-24 h-2 rounded-full bg-white/10 overflow-hidden">
-                <div className="h-full w-[83%] bg-[#d9dfd2] rounded-full" />
+                <div
+                  className="h-full bg-[#d9dfd2] rounded-full"
+                  style={{ width: device?.isOnline ? "100%" : "30%" }}
+                />
               </div>
             </div>
           </CardContent>
@@ -166,15 +239,25 @@ export function DashboardPage() {
               <span className="text-white/50">•••</span>
             </div>
             <div className="mt-8 rounded-[24px] bg-[#d9dfd2] p-5 text-black">
-              <p className="text-base font-medium">System is running stable.</p>
-              <p className="mt-2 text-sm text-black/65">Battery is stable and the current event sync looks healthy.</p>
-              <p className="mt-4 text-xs text-black/45">Today recommendation</p>
+              <p className="text-base font-medium">
+                {device?.isOnline ? "System is running stable." : "Device is offline."}
+              </p>
+              <p className="mt-2 text-sm text-black/65">
+                {device
+                  ? `Battery at ${device.batteryLevel}%. Mode: ${device.mode || "–"}.`
+                  : "No device data yet."}
+              </p>
+              <p className="mt-4 text-xs text-black/45">
+                {nowNext?.todayEventCount != null
+                  ? `${nowNext.todayEventCount} event${nowNext.todayEventCount !== 1 ? "s" : ""} today`
+                  : "Today recommendation"}
+              </p>
             </div>
             <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.02] p-5">
               <p className="text-base font-medium">Manual Sync Calendar</p>
               <div className="mt-4 flex items-center justify-between text-xs text-white/40">
                 <span>Action</span>
-                <span>5 min</span>
+                <span>30 sec poll</span>
               </div>
             </div>
           </CardContent>
@@ -185,40 +268,44 @@ export function DashboardPage() {
           <CardContent className="p-6 min-h-[220px] flex flex-col justify-between">
             <div>
               <p className="text-2xl font-medium">Battery Usage</p>
-              <p className="mt-2 text-sm text-black/55">Battery drain tracking</p>
+              <p className="mt-2 text-sm text-black/55">Battery level from device</p>
             </div>
             <div>
-              <p className="text-6xl font-light">5.7</p>
-              <p className="text-sm text-black/50">avg battery usage / hour</p>
+              <p className="text-6xl font-light">{device?.batteryLevel ?? "--"}</p>
+              <p className="text-sm text-black/50">% current battery level</p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Weekly Activity */}
+        {/* Weekly Activity — real calendar data */}
         <Card className="xl:col-span-4">
           <CardContent className="p-6 min-h-[220px]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-2xl font-medium">Weekly Activity</p>
-                <p className="mt-2 text-sm text-white/45">Device + calendar activity</p>
+                <p className="mt-2 text-sm text-white/45">
+                  {events.length > 0 ? `${events.length} events loaded` : "Calendar activity this week"}
+                </p>
               </div>
               <button className="rounded-full border border-white/15 px-3 py-1.5 text-sm text-white/70">Week</button>
             </div>
             <div className="mt-10 grid grid-cols-7 gap-3 text-center">
-              {[["Mon", 276], ["Tue", 282], ["Wed", 297], ["Thu", 269], ["Fri", 274], ["Sat", 175], ["Sun", 138]].map(
-                ([day, value], index) => (
+              {weeklyData.map(({ day, minutes }, index) => {
+                const heightPct = 20 + (minutes / maxMinutes) * 80;
+                const isToday = index === ((new Date().getDay() + 6) % 7);
+                return (
                   <div key={day} className="space-y-3">
                     <p className="text-xs text-white/35">{day}</p>
                     <div className="h-12 rounded-md bg-white/5 relative overflow-hidden">
                       <div
-                        className={`absolute bottom-0 left-0 right-0 ${index === 2 ? "bg-[#d9dfd2]" : "bg-white/20"}`}
-                        style={{ height: `${20 + (Number(value) / 300) * 100}%` }}
+                        className={`absolute bottom-0 left-0 right-0 ${isToday ? "bg-[#d9dfd2]" : "bg-white/20"}`}
+                        style={{ height: `${heightPct}%` }}
                       />
                     </div>
-                    <p className="text-xs text-white/55">{value} pts</p>
+                    <p className="text-xs text-white/55">{minutes} min</p>
                   </div>
-                )
-              )}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -231,7 +318,9 @@ export function DashboardPage() {
                 <p className="text-2xl font-medium">Now / Next Event</p>
                 <p className="mt-2 text-sm text-black/55">Current calendar processing</p>
               </div>
-              <button className="rounded-full border border-black/15 px-4 py-2 text-sm text-black/80">Change</button>
+              <button className="rounded-full border border-black/15 px-4 py-2 text-sm text-black/80">
+                {nowNext?.todayEventCount != null ? `${nowNext.todayEventCount} today` : "Live"}
+              </button>
             </div>
             <div className="mt-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
               <div>
@@ -242,9 +331,16 @@ export function DashboardPage() {
                     <p className="text-sm text-black/50">
                       {fmtTime(nowNext.now.startTime)} — {fmtTime(nowNext.now.endTime)}
                     </p>
+                    <p className="mt-1 text-sm font-medium text-black/70">{nowNext.now.title}</p>
                   </>
                 ) : (
                   <p className="mt-2 text-2xl font-medium text-black/45">No current event</p>
+                )}
+                {nowNext?.next && (
+                  <p className="mt-3 text-sm text-black/55">
+                    Next: <span className="font-medium">{nowNext.next.title}</span>{" "}
+                    at {fmtTime(nowNext.next.startTime)}
+                  </p>
                 )}
               </div>
               <div className="flex-1">
@@ -252,7 +348,13 @@ export function DashboardPage() {
                   <div className="absolute left-0 right-0 top-1/2 h-[2px] -translate-y-1/2 bg-black/20" />
                   {buildTimeSlots(nowNext?.now).map((label, index, arr) => (
                     <div key={index} className="relative flex flex-col items-center gap-3">
-                      <div className={`h-6 w-6 rounded-full border ${index > 0 && index < arr.length - 1 ? "bg-black border-black" : "bg-transparent border-black/35"}`} />
+                      <div
+                        className={`h-6 w-6 rounded-full border ${
+                          index > 0 && index < arr.length - 1
+                            ? "bg-black border-black"
+                            : "bg-transparent border-black/35"
+                        }`}
+                      />
                       <span className="text-xs text-black/55">{label}</span>
                     </div>
                   ))}
