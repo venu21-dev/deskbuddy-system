@@ -12,3 +12,55 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Mood animations */
+@keyframes mood-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.85); }
+}
+@keyframes mood-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.05); }
+}
+@keyframes mood-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes mood-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+@keyframes mood-pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes mood-float-z {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translate(18px, -36px) scale(1.1); }
+}
+@keyframes mood-tear {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0; }
+}
+@keyframes mood-spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes mood-note-float {
+  0% { opacity: 0; transform: translateY(0) rotate(-10deg); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-40px) rotate(10deg); }
+}
+@keyframes mood-wide-pulse {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.15); }
+}
+
+.mood-breathe   { animation: mood-breathe 3s ease-in-out infinite; }
+.mood-blink     { animation: mood-blink 4s ease-in-out infinite; }
+.mood-bounce    { animation: mood-bounce 1.2s ease-in-out infinite; }
+.mood-shake     { animation: mood-shake 0.5s ease-in-out infinite; }
+.mood-pulse-red { animation: mood-pulse-red 1s ease-in-out infinite; }
+.mood-wide-pulse { animation: mood-wide-pulse 0.8s ease-in-out infinite; }
