@@ -23,11 +23,8 @@ public class NowNextService : INowNextService
             .Take(10)
             .ToListAsync();
 
-        // Now: event whose window contains the current time
-        var nowEvent = upcoming.FirstOrDefault(e => e.StartTime <= now && e.EndTime > now);
-
-        // Next: first event that starts in the future
-        var nextEvent = upcoming.FirstOrDefault(e => e.StartTime > now);
+        var nowEvent  = NowNextCalculator.FindNow(upcoming, now);
+        var nextEvent = NowNextCalculator.FindNext(upcoming, now);
 
         var todayStart = now.Date;
         var todayEnd = todayStart.AddDays(1);
