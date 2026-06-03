@@ -2,7 +2,7 @@
 
 **Projekt:** DeskBuddy System (PRG3 / ADP)  
 **Autor:** Venurshan Manivannan  
-**Version:** 2.1
+**Version:** 2.3
 
 ---
 
@@ -10,11 +10,11 @@
 
 Das Ziel der Tests ist es sicherzustellen, dass das DeskBuddy-System korrekt funktioniert und die definierten Anforderungen erfüllt:
 
+- Die zentrale Business-Logik (Now/Next, Online/Offline) ist korrekt und stabil
 - Die REST API liefert korrekte Antworten mit dem richtigen HTTP-Statuscode
 - Authentifizierung (JWT und API Key) schützt die Endpoints korrekt
 - Der Heartbeat-Mechanismus speichert Gerätedaten (Mood, Status, Battery) korrekt
 - Google Calendar Sync aktualisiert die Datenbank vollständig
-- Die Now/Next-Logik erkennt das aktuelle und nächste Event korrekt
 - Das React-Frontend zeigt Live-Daten aus dem Backend an
 - Der ESP32 kommuniziert korrekt mit dem Backend (Heartbeat, NowNext)
 
@@ -29,21 +29,21 @@ Das Ziel der Tests ist es sicherzustellen, dass das DeskBuddy-System korrekt fun
           /  \
          / E2E\        ← wenige, manuelle Systemtests (4)
         /------\
-       / Integr.\     ← API-Tests via Postman – Hauptfokus (15)
+       / Integr.\     ← manuelle API-Tests via Postman (15)
       /----------\
-     / Manuell   \    ← Frontend + Device, manuell ausgeführt (19)
-    /______________\
+     / Manuell   \    ← Frontend + Device, manuell (19)
+    /--------------\
+   / Unit Tests     \  ← automatisierte xUnit-Tests (13)
+  /________________\
 ```
 
-**Begründung:**  
-Da es sich um ein Schulprojekt handelt, wurde kein vollautomatisiertes Test-Framework (xUnit, Jest) eingesetzt. Der Fokus liegt auf:
+**Begründung:**
 
-1. **Integrationstests via Postman** — vollständige API-Abdeckung mit dokumentierten Ergebnissen
-2. **Manuelle Frontend-Tests** — alle Seiten und Funktionen wurden manuell durchgeklickt und geprüft
-3. **Manuelle Device-Tests** — ESP32 wurde mit dem Serial Monitor und echten Netzwerkaufrufen geprüft
-4. **Manuelle E2E-Tests** — der gesamte Datenfluss wurde mit realem Gerät verifiziert
-
-> **Hinweis zu automatisierten Tests:** Automatisierte Unit Tests (xUnit / Jest) wurden aus Zeitgründen nicht vollständig umgesetzt. Die zentralen Funktionen wurden stattdessen über API-/Integrationstests mit Postman sowie manuelle Frontend-, Device- und End-to-End-Tests geprüft.
+1. **Automatisierte Unit Tests (xUnit)** — zentrale Business-Logik wurde in eine isolierte, datenbankfreie Klasse extrahiert und vollständig automatisiert getestet
+2. **Manuelle API-/Integrationstests via Postman** — vollständige API-Abdeckung mit dokumentierten Anfragen und Antworten
+3. **Manuelle Frontend-Tests** — alle Seiten und Funktionen wurden manuell im Browser geprüft
+4. **Manuelle Device-Tests** — ESP32 wurde mit dem Serial Monitor und echten Netzwerkaufrufen geprüft
+5. **Manuelle E2E-Tests** — der gesamte Datenfluss wurde mit realem Gerät verifiziert
 
 ---
 
@@ -59,17 +59,43 @@ React Frontend ──(JWT)──────────────┘
 
 | Schicht | Testart | Werkzeug | Anzahl Tests |
 |---------|---------|----------|-------------|
-| Backend API | Integrationstests | Postman | 15 |
+| Business-Logik | Automatisierte Unit Tests | xUnit (.NET 8) | 13 |
+| Backend API | Manuelle API-/Integrationstests | Postman | 15 |
 | Frontend | Manuelle Tests | Browser (Chrome) | 12 |
 | ESP32 Device | Manuelle Tests | Serial Monitor + Netzwerk | 7 |
 | Gesamtsystem | End-to-End Tests | Manuell | 4 |
-| **Total** | | | **38** |
+| **Total** | | | **51** |
 
 ---
 
 ## 4. Testplan
 
-### 4.1 Integrationstests – REST API (Postman)
+### 4.1 Automatisierte Unit Tests (xUnit)
+
+Testprojekt: `tests/DeskBuddy.Tests/`  
+Ausführen: `cd tests/DeskBuddy.Tests && dotnet test`
+
+Getestet wird die statische Hilfsklasse `NowNextCalculator` — die zentrale Business-Logik ohne Datenbankabhängigkeit.
+
+| # | Testname | Beschreibung | Erwartetes Ergebnis |
+|---|----------|-------------|---------------------|
+| UT-01 | `FindNow_WhenNoEvents_ReturnsNull` | Leere Event-Liste | `null` |
+| UT-02 | `FindNow_WhenEventIsRunning_ReturnsEvent` | Event läuft gerade | Event wird zurückgegeben |
+| UT-03 | `FindNow_WhenEventAlreadyEnded_ReturnsNull` | Event bereits beendet | `null` |
+| UT-04 | `FindNow_WhenEventStartsExactlyNow_ReturnsEvent` | Start == now (Grenzfall) | Event gilt als laufend (inklusiv) |
+| UT-05 | `FindNow_WhenEventEndsExactlyNow_ReturnsNull` | End == now (Grenzfall) | Event gilt als beendet (exklusiv) |
+| UT-06 | `FindNext_WhenFutureEventExists_ReturnsEarliestOne` | Mehrere zukünftige Events | Frühestes Event |
+| UT-07 | `FindNext_WhenNoFutureEvents_ReturnsNull` | Keine zukünftigen Events | `null` |
+| UT-08 | `FindNext_WithMixedPastAndFutureEvents_IgnoresPastEvents` | Vergangene und zukünftige Events gemischt | Nur zukünftiges Event |
+| UT-09 | `FindNext_WithUnorderedFutureEvents_ReturnsEarliestOne` | Unsortierte zukünftige Events | Frühestes Event (unabhängig von Reihenfolge) |
+| UT-10 | `IsDeviceOnline_WhenLastSeenRecently_ReturnsTrue` | LastSeen vor 30 Sekunden | `true` |
+| UT-11 | `IsDeviceOnline_WhenLastSeenTooLongAgo_ReturnsFalse` | LastSeen vor 5 Minuten (Grenze: 2 Min) | `false` |
+| UT-12 | `IsDeviceOnline_WhenLastSeenIsNull_ReturnsFalse` | LastSeen ist `null` | `false` |
+| UT-13 | `IsDeviceOnline_WhenLastSeenExactlyAtBoundary_ReturnsFalse` | LastSeen genau an der Grenze (Grenzfall) | `false` (Grenze ist exklusiv) |
+
+---
+
+### 4.2 Manuelle API-/Integrationstests (Postman)
 
 Getestet mit der Postman Collection: `tests/DeskBuddy.postman_collection.json`
 
@@ -93,7 +119,7 @@ Getestet mit der Postman Collection: `tests/DeskBuddy.postman_collection.json`
 
 ---
 
-### 4.2 Manuelle Tests – Frontend (React Dashboard)
+### 4.3 Manuelle Tests – Frontend (React Dashboard)
 
 | # | Seite | Testfall | Erwartetes Ergebnis |
 |---|-------|----------|---------------------|
@@ -112,7 +138,7 @@ Getestet mit der Postman Collection: `tests/DeskBuddy.postman_collection.json`
 
 ---
 
-### 4.3 Manuelle Tests – ESP32 Device
+### 4.4 Manuelle Tests – ESP32 Device
 
 | # | Testfall | Vorgehen | Erwartetes Ergebnis |
 |---|----------|----------|---------------------|
@@ -126,7 +152,7 @@ Getestet mit der Postman Collection: `tests/DeskBuddy.postman_collection.json`
 
 ---
 
-### 4.4 End-to-End Tests – Gesamter Datenfluss
+### 4.5 End-to-End Tests – Gesamter Datenfluss
 
 | # | Testfall | Schritte | Erwartetes Ergebnis |
 |---|----------|----------|---------------------|
@@ -139,96 +165,113 @@ Getestet mit der Postman Collection: `tests/DeskBuddy.postman_collection.json`
 
 ## 5. Testausführung und Nachweise
 
-Alle Nachweise (Screenshots / Serial-Logs) sind abgelegt unter:
-
 ```
 docs/
 └── testing/
+    ├── unit-tests/
     ├── postman/
     ├── frontend/
     └── device/
 ```
 
-### 5.1 API-Tests (Postman)
+### 5.1 Unit Tests (xUnit)
 
 | Test-ID | Beschreibung | Nachweis |
 |---------|-------------|---------|
-| IT-01 | Health Check | `docs/testing/postman/IT-01-health.png` |
-| IT-02 | Login erfolgreich | `docs/testing/postman/login-success.png` |
-| IT-03 | Login fehlgeschlagen | `docs/testing/postman/login-invalid.png` |
-| IT-04 | GET Devices | `docs/testing/postman/get-devices.png` |
-| IT-08 | Heartbeat erfolgreich | `docs/testing/postman/heartbeat-success.png` |
-| IT-09 | Heartbeat ohne API Key | `docs/testing/postman/heartbeat-missing-api-key.png` |
-| IT-11 | NowNext Response | `docs/testing/postman/nownext-response.png` |
-| IT-13 | Google Calendar Sync | `docs/testing/postman/google-calendar-sync.png` |
-| IT-14 | Device erstellen | `docs/testing/postman/create-device.png` |
+| UT-01 bis UT-13 | Alle 13 Tests, `dotnet test`-Ausgabe | `docs/testing/unit-tests/dotnet-test-result.png` |
 
-### 5.2 Frontend-Tests (Browser)
+### 5.2 API-Tests (Postman)
 
 | Test-ID | Beschreibung | Nachweis |
 |---------|-------------|---------|
-| MT-01 | Login Screen | `docs/testing/frontend/login-screen.png` |
-| MT-02 | Login Fehlermeldung | `docs/testing/frontend/login-error.png` |
-| MT-03 | Dashboard Übersicht | `docs/testing/frontend/dashboard-overview.png` |
-| MT-09 | Calendar Ansicht | `docs/testing/frontend/calendar-view.png` |
-| MT-07 | Mood Preview Animation | `docs/testing/frontend/mood-preview.png` |
+| IT-01 | Health Check | Nachweis vorgesehen unter `docs/testing/postman/IT-01-health.png` |
+| IT-02 | Login erfolgreich | Nachweis vorgesehen unter `docs/testing/postman/login-success.png` |
+| IT-03 | Login fehlgeschlagen | Nachweis vorgesehen unter `docs/testing/postman/login-invalid.png` |
+| IT-04 | GET Devices | Nachweis vorgesehen unter `docs/testing/postman/get-devices.png` |
+| IT-08 | Heartbeat erfolgreich | Nachweis vorgesehen unter `docs/testing/postman/heartbeat-success.png` |
+| IT-09 | Heartbeat ohne API Key | Nachweis vorgesehen unter `docs/testing/postman/heartbeat-missing-api-key.png` |
+| IT-11 | NowNext Response | Nachweis vorgesehen unter `docs/testing/postman/nownext-response.png` |
+| IT-13 | Google Calendar Sync | Nachweis vorgesehen unter `docs/testing/postman/google-calendar-sync.png` |
+| IT-14 | Device erstellen | Nachweis vorgesehen unter `docs/testing/postman/create-device.png` |
 
-### 5.3 Device-Tests (ESP32)
+### 5.3 Frontend-Tests (Browser)
 
 | Test-ID | Beschreibung | Nachweis |
 |---------|-------------|---------|
-| DT-01 | WiFi + HTTP verbunden | `docs/testing/device/esp32-serial-wifi-http.png` |
-| DT-03 | Heartbeat Serial Log | `docs/testing/device/esp32-heartbeat-success.png` |
-| DT-05 | Display FACE Mode | `docs/testing/device/esp32-face-mode.jpg` |
-| DT-06 | Display CALENDAR Mode | `docs/testing/device/esp32-calendar-mode.jpg` |
+| MT-01 | Login Screen | Nachweis vorgesehen unter `docs/testing/frontend/login-screen.png` |
+| MT-02 | Login Fehlermeldung | Nachweis vorgesehen unter `docs/testing/frontend/login-error.png` |
+| MT-03 | Dashboard Übersicht | Nachweis vorgesehen unter `docs/testing/frontend/dashboard-overview.png` |
+| MT-07 | Mood Preview Animation | Nachweis vorgesehen unter `docs/testing/frontend/mood-preview.png` |
+| MT-09 | Calendar Ansicht | Nachweis vorgesehen unter `docs/testing/frontend/calendar-view.png` |
+
+### 5.4 Device-Tests (ESP32)
+
+| Test-ID | Beschreibung | Nachweis |
+|---------|-------------|---------|
+| DT-01 | WiFi + HTTP verbunden | Nachweis vorgesehen unter `docs/testing/device/esp32-serial-wifi-http.png` |
+| DT-03 | Heartbeat Serial Log | Nachweis vorgesehen unter `docs/testing/device/esp32-heartbeat-success.png` |
+| DT-05 | Display FACE Mode | Nachweis vorgesehen unter `docs/testing/device/esp32-face-mode.jpg` |
+| DT-06 | Display CALENDAR Mode | Nachweis vorgesehen unter `docs/testing/device/esp32-calendar-mode.jpg` |
 
 ---
 
 ## 6. Testergebnisse Übersicht
 
-### Postman API-Tests
+### Automatisierte Unit Tests (xUnit)
+
+| Bereich | Tests | Status |
+|---------|-------|--------|
+| FindNow (Standardfälle) | 3 | ✅ Bestanden |
+| FindNow (Grenzfälle) | 2 | ✅ Bestanden |
+| FindNext (Standardfälle) | 2 | ✅ Bestanden |
+| FindNext (Grenzfälle) | 2 | ✅ Bestanden |
+| IsDeviceOnline (Standardfälle) | 2 | ✅ Bestanden |
+| IsDeviceOnline (Grenzfälle) | 2 | ✅ Bestanden |
+| **Total** | **13** | **✅ Alle bestanden** |
+
+### Manuelle API-/Integrationstests (Postman)
 
 | Kategorie | Tests | Status |
 |-----------|-------|--------|
-| Health | 1 | ✅ Pass |
-| Auth (Login) | 2 | ✅ Pass |
-| Devices CRUD | 4 | ✅ Pass |
-| Heartbeat | 3 | ✅ Pass |
-| NowNext | 1 | ✅ Pass |
-| Calendar Events | 1 | ✅ Pass |
-| Google Sync | 1 | ✅ Pass |
-| Device Status | 2 | ✅ Pass |
-| **Total** | **15** | **✅ All Pass** |
+| Health | 1 | Durchgeführt |
+| Auth (Login) | 2 | Durchgeführt |
+| Devices CRUD | 4 | Durchgeführt |
+| Heartbeat | 3 | Durchgeführt |
+| NowNext | 1 | Durchgeführt |
+| Calendar Events | 1 | Durchgeführt |
+| Google Sync | 1 | Durchgeführt |
+| Device Status | 2 | Durchgeführt |
+| **Total** | **15** | **Durchgeführt** |
 
 ### Manuelle Frontend-Tests
 
 | Seite | Tests | Status |
 |-------|-------|--------|
-| Login | 2 | ✅ Pass |
-| Dashboard | 4 | ✅ Pass |
-| DeskBuddy Status | 2 | ✅ Pass |
-| Calendar | 3 | ✅ Pass |
-| Settings | 1 | ✅ Pass |
-| **Total** | **12** | **✅ All Pass** |
+| Login | 2 | Manuell geprüft |
+| Dashboard | 4 | Manuell geprüft |
+| DeskBuddy Status | 2 | Manuell geprüft |
+| Calendar | 3 | Manuell geprüft |
+| Settings | 1 | Manuell geprüft |
+| **Total** | **12** | **Manuell geprüft** |
 
 ### Device-Tests (ESP32)
 
 | Bereich | Tests | Status |
 |---------|-------|--------|
-| Connectivity | 2 | ✅ Pass |
-| Heartbeat | 2 | ✅ Pass |
-| Display / Touch | 2 | ✅ Pass |
-| Backend-Verifikation | 1 | ✅ Pass |
-| **Total** | **7** | **✅ All Pass** |
+| Connectivity | 2 | Manuell geprüft |
+| Heartbeat | 2 | Manuell geprüft |
+| Display / Touch | 2 | Manuell geprüft |
+| Backend-Verifikation | 1 | Manuell geprüft |
+| **Total** | **7** | **Manuell geprüft** |
 
 ### End-to-End Tests
 
 | Test | Status | Bemerkung |
 |------|--------|-----------|
-| E2E-01 ESP32 → Frontend | ✅ Pass | Mood-Update innerhalb von 30s sichtbar |
-| E2E-02 Google → ESP32 | ✅ Pass | Nach manuellem Sync sofort auf Display |
-| E2E-03 Google → Frontend | ✅ Pass | Geändertes Event in Calendar-Seite |
-| E2E-04 Offline-Erkennung | ✅ Pass | Status wechselt nach 2min zu Offline |
+| E2E-01 ESP32 → Frontend | Manuell geprüft | Mood-Update innerhalb von 30s sichtbar |
+| E2E-02 Google → ESP32 | Manuell geprüft | Nach manuellem Sync sofort auf Display |
+| E2E-03 Google → Frontend | Manuell geprüft | Geändertes Event in Calendar-Seite |
+| E2E-04 Offline-Erkennung | Manuell geprüft | Status wechselt nach 2 Min zu „Offline" |
 
 ---
 
@@ -236,8 +279,8 @@ docs/
 
 | Bereich | Beschreibung |
 |---------|-------------|
-| Keine automatisierten Unit Tests | xUnit-Tests wurden nicht implementiert. Die Service-Logik wurde indirekt über Postman-Integrationstests und manuelle Tests geprüft. |
 | Keine automatisierten Frontend-Tests | Jest / React Testing Library wurde nicht eingesetzt. Tests wurden manuell im Browser durchgeführt. |
+| Keine automatisierten Device-Tests | ESP32-Kommunikation wurde nur manuell via Serial Monitor und Netzwerkaufrufe geprüft. |
 | Google OAuth nur manuell getestet | Der Token-Refresh-Flow wurde nicht automatisiert getestet. Bei abgelaufenem Token ist manueller Re-Login erforderlich. |
 | ESP32 nur mit einem Gerät getestet | Multi-Device-Szenarien wurden nicht getestet. |
 | Keine Lasttests | Performance und Skalierbarkeit sind für ein lokales Schulprojekt nicht relevant. |
@@ -248,6 +291,7 @@ docs/
 
 | Komponente | Details |
 |------------|---------|
+| Unit Tests | `dotnet test`, .NET 8, xUnit 2.9.0 |
 | Backend | Lokal, `dotnet run --urls "http://0.0.0.0:5294"` |
 | Frontend | Lokal, `npm run dev`, Port 5173 |
 | Datenbank | SQLite, `backend/DeskBuddy.Api/deskbuddy.db` |
@@ -260,11 +304,12 @@ docs/
 
 ## 9. Fazit
 
-Das DeskBuddy-System wurde systematisch auf allen relevanten Ebenen getestet. Insgesamt wurden **34 funktionale Tests** sowie **4 End-to-End-Szenarien** dokumentiert und ausgeführt:
+Das DeskBuddy-System wurde systematisch auf allen relevanten Ebenen getestet. Insgesamt wurden **47 funktionale Testfälle** sowie **4 End-to-End-Szenarien** dokumentiert und durchgeführt:
 
-- **15 API-Tests** via Postman decken alle Endpoints mit positiven und negativen Szenarien ab
-- **12 manuelle Frontend-Tests** verifizieren alle Seiten und Funktionen des Dashboards
-- **7 Device-Tests** bestätigen die korrekte ESP32-Kommunikation mit dem Backend
-- **4 End-to-End Tests** prüfen den vollständigen Datenfluss von Google Calendar bis zum Display
+- **13 automatisierte Unit Tests** (xUnit) decken die zentrale Business-Logik (Now/Next-Berechnung, Online/Offline-Erkennung) vollständig ab — inklusive Grenzfälle
+- **15 manuelle API-/Integrationstests** via Postman decken alle Endpoints mit positiven und negativen Szenarien ab
+- **12 manuelle Frontend-Tests** prüfen alle Seiten und Funktionen des Dashboards im Browser
+- **7 manuelle Device-Tests** bestätigen die korrekte ESP32-Kommunikation mit dem Backend
+- **4 manuelle End-to-End-Tests** prüfen den vollständigen Datenfluss von Google Calendar bis zum Display
 
-Die Test-Pyramide wurde eingehalten: der Schwerpunkt liegt auf Integrationstests (Postman), ergänzt durch manuelle UI- und Device-Tests sowie wenige, gezielte E2E-Tests. Automatisierte Unit Tests wurden aus Zeitgründen nicht vollständig umgesetzt — die Kernlogik wurde stattdessen durch Integrationstests mit Postman sowie manuelle System- und E2E-Tests abgedeckt. Die Testabdeckung ist für den Projektumfang vollständig und nachvollziehbar dokumentiert.
+Die Test-Pyramide wurde eingehalten: die Basis bilden automatisierte Unit Tests für die isolierte Business-Logik, darüber manuelle API-/Integrationstests (Postman), ergänzt durch manuelle UI- und Device-Tests sowie wenige, gezielte E2E-Tests. Die Testabdeckung ist für den Projektumfang ausreichend und nachvollziehbar dokumentiert.
