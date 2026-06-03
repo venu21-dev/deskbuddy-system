@@ -24,27 +24,41 @@ public class GoogleCalendarService : IGoogleCalendarService
     {
         var service = await BuildServiceAsync();
 
-        var request = service.Events.List("primary");
-        request.TimeMinDateTimeOffset = DateTimeOffset.UtcNow;
-        request.TimeMaxDateTimeOffset = DateTimeOffset.UtcNow.AddDays(7);
-        request.SingleEvents = true;
-        request.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
-        request.MaxResults = 20;
+        var calendarIds = new List<string> { "primary" };
+        var extras = _config.GetSection("GoogleCalendar:ExtraCalendarIds").Get<string[]>();
+        if (extras != null)
+            calendarIds.AddRange(extras);
 
-        var result = await request.ExecuteAsync();
+        var allEvents = new List<CalendarEventDto>();
 
-        return result.Items?
-            .Where(e => e.Start?.DateTime != null)
-            .Select(e => new CalendarEventDto
-            {
-                Id = 0,
-                Title = e.Summary ?? "(No title)",
-                StartTime = e.Start.DateTime!.Value,
-                EndTime = e.End?.DateTime ?? e.Start.DateTime!.Value,
-                Location = e.Location,
-                Description = e.Description,
-                GoogleEventId = e.Id
-            }) ?? Enumerable.Empty<CalendarEventDto>();
+        foreach (var calendarId in calendarIds)
+        {
+            var request = service.Events.List(calendarId);
+            request.TimeMinDateTimeOffset = DateTimeOffset.UtcNow;
+            request.TimeMaxDateTimeOffset = DateTimeOffset.UtcNow.AddDays(7);
+            request.SingleEvents = true;
+            request.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
+            request.MaxResults = 20;
+
+            var result = await request.ExecuteAsync();
+
+            var events = result.Items?
+                .Where(e => e.Start?.DateTime != null)
+                .Select(e => new CalendarEventDto
+                {
+                    Id = 0,
+                    Title = e.Summary ?? "(No title)",
+                    StartTime = e.Start.DateTime!.Value,
+                    EndTime = e.End?.DateTime ?? e.Start.DateTime!.Value,
+                    Location = e.Location,
+                    Description = e.Description,
+                    GoogleEventId = e.Id
+                }) ?? Enumerable.Empty<CalendarEventDto>();
+
+            allEvents.AddRange(events);
+        }
+
+        return allEvents.OrderBy(e => e.StartTime);
     }
 
     public async Task SyncToDbAsync()
