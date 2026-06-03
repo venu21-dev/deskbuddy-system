@@ -4,9 +4,13 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:5294" }
+    { "key": "baseUrl",    "value": "http://localhost:5294" },
+    { "key": "authToken",  "value": "" },
+    { "key": "deviceId",   "value": "" },
+    { "key": "eventId",    "value": "" }
   ],
   "item": [
+
     {
       "name": "Health",
       "item": [
@@ -26,15 +30,85 @@
         }
       ]
     },
+
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "POST /api/auth/login – valid credentials",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has token', () => pm.expect(pm.response.json().token).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('authToken', pm.response.json().token);"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/auth/login – invalid password",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"wrong\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/auth/me – with token",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/me",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Username is admin', () => pm.expect(pm.response.json().username).to.eql('admin'));"
+            ]}
+          }]
+        }
+      ]
+    },
+
     {
       "name": "Devices",
       "item": [
         {
-          "name": "POST /api/devices – Create device",
+          "name": "GET /api/devices – no token",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/devices"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/devices – create device",
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/devices",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"name\": \"Desk-Device-01\"\n}" }
           },
           "event": [{
@@ -47,10 +121,11 @@
           }]
         },
         {
-          "name": "GET /api/devices – Get all",
+          "name": "GET /api/devices – get all",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/devices"
+            "url": "{{baseUrl}}/api/devices",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -61,10 +136,11 @@
           }]
         },
         {
-          "name": "GET /api/devices/{id} – Get by id",
+          "name": "GET /api/devices/{id} – get by id",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/devices/{{deviceId}}"
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -75,12 +151,65 @@
           }]
         },
         {
-          "name": "PUT /api/devices/{id} – Update device",
+          "name": "GET /api/devices/{id}/status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}/status",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has isOnline', () => pm.expect(pm.response.json()).to.have.property('isOnline'));",
+              "pm.test('Has batteryLevel', () => pm.expect(pm.response.json()).to.have.property('batteryLevel'));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/devices/{id}/heartbeat – with API key",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}/heartbeat",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Api-Key",    "value": "deskbuddy-device-key-2024" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"batteryLevel\": 100,\n  \"mood\": \"happy\",\n  \"mode\": \"face\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has message', () => pm.expect(pm.response.json().message).to.be.a('string'));"
+            ]}
+          }]
+        },
+        {
+          "name": "POST /api/devices/{id}/heartbeat – no API key",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}/heartbeat",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"batteryLevel\": 100,\n  \"mood\": \"happy\",\n  \"mode\": \"face\"\n}" }
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        },
+        {
+          "name": "PUT /api/devices/{id} – update device",
           "request": {
             "method": "PUT",
             "url": "{{baseUrl}}/api/devices/{{deviceId}}",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Desk-Device-01-Updated\",\n  \"isOnline\": true,\n  \"batteryLevel\": 80,\n  \"mood\": \"happy\",\n  \"mode\": \"focus\"\n}" }
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Desk-Device-01-Updated\",\n  \"isOnline\": true,\n  \"batteryLevel\": 80,\n  \"mood\": \"happy\",\n  \"mode\": \"face\"\n}" }
           },
           "event": [{
             "listen": "test",
@@ -90,10 +219,11 @@
           }]
         },
         {
-          "name": "DELETE /api/devices/{id} – Delete device",
+          "name": "DELETE /api/devices/{id} – delete device",
           "request": {
             "method": "DELETE",
-            "url": "{{baseUrl}}/api/devices/{{deviceId}}"
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -106,7 +236,8 @@
           "name": "GET /api/devices/{id} – 404 after delete",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/devices/{{deviceId}}"
+            "url": "{{baseUrl}}/api/devices/{{deviceId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -116,11 +247,14 @@
           }]
         },
         {
-          "name": "POST /api/devices – Validation: empty name",
+          "name": "POST /api/devices – validation: empty name",
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/devices",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"name\": \"\"\n}" }
           },
           "event": [{
@@ -132,12 +266,15 @@
           }]
         },
         {
-          "name": "PUT /api/devices – Validation: battery out of range",
+          "name": "PUT /api/devices – validation: battery out of range",
           "request": {
             "method": "PUT",
             "url": "{{baseUrl}}/api/devices/1",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test\",\n  \"isOnline\": true,\n  \"batteryLevel\": 150,\n  \"mood\": \"neutral\",\n  \"mode\": \"normal\"\n}" }
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test\",\n  \"isOnline\": true,\n  \"batteryLevel\": 150,\n  \"mood\": \"neutral\",\n  \"mode\": \"face\"\n}" }
           },
           "event": [{
             "listen": "test",
@@ -148,16 +285,20 @@
         }
       ]
     },
+
     {
       "name": "CalendarEvents",
       "item": [
         {
-          "name": "POST /api/calendarevents – Create event",
+          "name": "POST /api/calendarevents – create event",
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/calendarevents",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Team Meeting\",\n  \"startTime\": \"2026-04-22T09:00:00\",\n  \"endTime\": \"2026-04-22T10:00:00\",\n  \"location\": \"Room 1\",\n  \"description\": \"Weekly sync\"\n}" }
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Team Meeting\",\n  \"startTime\": \"2026-06-10T09:00:00\",\n  \"endTime\": \"2026-06-10T10:00:00\",\n  \"location\": \"Room 1\",\n  \"description\": \"Weekly sync\"\n}" }
           },
           "event": [{
             "listen": "test",
@@ -169,10 +310,11 @@
           }]
         },
         {
-          "name": "GET /api/calendarevents – Get all",
+          "name": "GET /api/calendarevents – get all",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/calendarevents"
+            "url": "{{baseUrl}}/api/calendarevents",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -183,10 +325,11 @@
           }]
         },
         {
-          "name": "GET /api/calendarevents/{id} – Get by id",
+          "name": "GET /api/calendarevents/{id} – get by id",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/api/calendarevents/{{eventId}}"
+            "url": "{{baseUrl}}/api/calendarevents/{{eventId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -197,12 +340,15 @@
           }]
         },
         {
-          "name": "PUT /api/calendarevents/{id} – Update event",
+          "name": "PUT /api/calendarevents/{id} – update event",
           "request": {
             "method": "PUT",
             "url": "{{baseUrl}}/api/calendarevents/{{eventId}}",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Team Meeting Updated\",\n  \"startTime\": \"2026-04-22T09:00:00\",\n  \"endTime\": \"2026-04-22T11:00:00\",\n  \"location\": \"Room 2\",\n  \"description\": \"Updated sync\"\n}" }
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Team Meeting Updated\",\n  \"startTime\": \"2026-06-10T09:00:00\",\n  \"endTime\": \"2026-06-10T11:00:00\",\n  \"location\": \"Room 2\",\n  \"description\": \"Updated sync\"\n}" }
           },
           "event": [{
             "listen": "test",
@@ -212,10 +358,11 @@
           }]
         },
         {
-          "name": "DELETE /api/calendarevents/{id} – Delete event",
+          "name": "DELETE /api/calendarevents/{id} – delete event",
           "request": {
             "method": "DELETE",
-            "url": "{{baseUrl}}/api/calendarevents/{{eventId}}"
+            "url": "{{baseUrl}}/api/calendarevents/{{eventId}}",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
           },
           "event": [{
             "listen": "test",
@@ -225,12 +372,15 @@
           }]
         },
         {
-          "name": "POST /api/calendarevents – Validation: missing title",
+          "name": "POST /api/calendarevents – validation: missing title",
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/calendarevents",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"startTime\": \"2026-04-22T09:00:00\",\n  \"endTime\": \"2026-04-22T10:00:00\"\n}" }
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{authToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"startTime\": \"2026-06-10T09:00:00\",\n  \"endTime\": \"2026-06-10T10:00:00\"\n}" }
           },
           "event": [{
             "listen": "test",
@@ -241,6 +391,76 @@
           }]
         }
       ]
+    },
+
+    {
+      "name": "GoogleCalendar",
+      "item": [
+        {
+          "name": "POST /api/googlecalendar/sync",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/googlecalendar/sync",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/googlecalendar/events",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/googlecalendar/events",
+            "header": [{ "key": "Authorization", "value": "Bearer {{authToken}}" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Is array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+            ]}
+          }]
+        }
+      ]
+    },
+
+    {
+      "name": "NowNext",
+      "item": [
+        {
+          "name": "GET /api/nownext – with API key",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/nownext",
+            "header": [{ "key": "X-Api-Key", "value": "deskbuddy-device-key-2024" }]
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 200', () => pm.response.to.have.status(200));",
+              "pm.test('Has todayEventCount', () => pm.expect(pm.response.json()).to.have.property('todayEventCount'));"
+            ]}
+          }]
+        },
+        {
+          "name": "GET /api/nownext – no API key",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/nownext"
+          },
+          "event": [{
+            "listen": "test",
+            "script": { "exec": [
+              "pm.test('Status 401', () => pm.response.to.have.status(401));"
+            ]}
+          }]
+        }
+      ]
     }
+
   ]
 }
