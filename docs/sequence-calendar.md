@@ -1,140 +1,90 @@
-# Sequence Diagrams — DeskBuddy Backend Flows
+# Sequence Diagrams — DeskBuddy
 
 ---
 
-## 1. Automatic Calendar Sync (CalendarSyncBackgroundService)
+## 1. Calendar Sync Flow
 
-The backend starts a `BackgroundService` that waits 5 minutes after startup, then
-syncs automatically in a continuous loop.
+Sync runs automatically every 5 minutes via `CalendarSyncBackgroundService`.
+A manual sync can also be triggered from the React Dashboard (`POST /api/googlecalendar/sync`).
+Both paths use the same Full-Replace logic: all local events are deleted, then fresh events are inserted.
+Google Calendar is accessed only by the backend — neither the ESP32 nor the React Dashboard talk to Google directly.
 
 ```mermaid
 sequenceDiagram
-    participant BG as CalendarSyncBackgroundService
-    participant GCS as GoogleCalendarService
-    participant GCAL as Google Calendar API
+    participant Trigger as BackgroundService / Admin
+    participant API as Backend API
+    participant GCal as Google Calendar API
     participant DB as SQLite DB
 
-    loop every 5 minutes
-        BG->>GCS: SyncToDbAsync()
-        GCS->>GCAL: List events (OAuth2, primary + extra calendar IDs, next 7 days)
-        GCAL-->>GCS: Event list
-        GCS->>DB: DELETE all CalendarEvents (full replace)
-        GCS->>DB: INSERT fetched events
-        GCS-->>BG: Done (logs timestamp)
-    end
+    Trigger->>API: Trigger sync (automatic or manual)
+    API->>GCal: Request events (OAuth2, next 7 days)
+    GCal-->>API: Return event list
+    API->>DB: Delete all local CalendarEvents
+    API->>DB: Insert fresh events
+    API-->>Trigger: Sync complete
 ```
 
 ---
 
-## 2. Manual Calendar Sync (Admin / React Dashboard)
+## 2. Now / Next Flow
 
-The React Dashboard exposes a Sync button that calls `POST /api/googlecalendar/sync`.
-This runs the same `SyncToDbAsync()` method as the background service.
+The ESP32 device and the React Dashboard both call `GET /api/nownext` to get the current
+and next calendar event. Both use the `X-Api-Key` header for this endpoint.
+The backend reads stored events from SQLite and calculates the result — no Google Calendar call is made here.
 
-```mermaid
-sequenceDiagram
-    actor Admin as Admin (React Dashboard)
-    participant API as ASP.NET Core API
-    participant GCS as GoogleCalendarService
-    participant GCAL as Google Calendar API
-    participant DB as SQLite DB
-
-    Admin->>API: POST /api/googlecalendar/sync (JWT)
-    API->>GCS: SyncToDbAsync()
-    GCS->>GCAL: List events (OAuth2, primary + extra calendar IDs, next 7 days)
-    GCAL-->>GCS: Event list
-    GCS->>DB: DELETE all CalendarEvents
-    GCS->>DB: INSERT fetched events
-    API-->>Admin: 200 OK
-```
-
----
-
-## 3. Now/Next Flow
-
-`GET /api/nownext` returns the currently running event, the next upcoming event,
-and the total count of events today.
-
-The endpoint is protected by `[ApiKeyAuth]` — both the ESP32 device and the
-React Dashboard send the `X-Api-Key` header (the React Dashboard uses the same
-device key, stored in `src/api/client.js`).
+- **Now** — the event where `StartTime <= now < EndTime`
+- **Next** — the earliest upcoming event where `StartTime > now`
+- `now` or `next` can be `null` if no matching event exists
 
 ```mermaid
 sequenceDiagram
     participant Client as ESP32 / React Dashboard
-    participant API as ASP.NET Core API
-    participant NNS as NowNextService
-    participant NNC as NowNextCalculator
+    participant API as Backend API
     participant DB as SQLite DB
 
     Client->>API: GET /api/nownext (X-Api-Key)
-    API->>API: ApiKeyAuthFilter validates X-Api-Key
-    API->>NNS: GetNowNextAsync()
-    NNS->>DB: SELECT CalendarEvents WHERE EndTime > now (ordered, top 10)
-    DB-->>NNS: Event list
-    NNS->>NNC: FindNow(events, now)
-    NNC-->>NNS: Current event (or null)
-    NNS->>NNC: FindNext(events, now)
-    NNC-->>NNS: Next event (or null)
-    NNS->>DB: COUNT CalendarEvents WHERE StartTime in today
-    DB-->>NNS: TodayEventCount
-    NNS-->>API: NowNextDto
-    API-->>Client: 200 OK { now: {...}, next: {...}, todayEventCount: N }
+    API->>API: Validate API key
+    API->>DB: Read upcoming CalendarEvents
+    DB-->>API: Event list
+    API->>API: Calculate Now and Next
+    API-->>Client: { now, next, todayEventCount }
 ```
-
-**NowNextCalculator logic:**
-- `FindNow` — first event where `StartTime <= now < EndTime` (start inclusive, end exclusive)
-- `FindNext` — earliest event where `StartTime > now` (uses `MinBy`, handles unsorted input)
 
 ---
 
-## 4. ESP32 Heartbeat and Device Status
+## 3. ESP32 Heartbeat and Device Status
 
-The ESP32 sends a heartbeat every 30 seconds to keep the backend informed of its
-battery level, mood, mode and that it is still online.
-
-The React Dashboard reads device status independently via a separate JWT-protected endpoint.
+The ESP32 sends a heartbeat every 30 seconds so the backend knows it is still online.
+The React Dashboard reads the device status independently using JWT.
+Online/offline is not stored — it is calculated from `LastSeen` at the time of the status request.
 
 ```mermaid
 sequenceDiagram
     participant ESP32 as ESP32 Device
-    participant API as ASP.NET Core API
-    participant DS as DeviceService
+    participant API as Backend API
     participant DB as SQLite DB
-    participant REACT as React Dashboard
+    participant React as React Dashboard
 
     loop every 30 seconds
         ESP32->>API: POST /api/devices/{id}/heartbeat (X-Api-Key)
-        Note right of ESP32: { batteryLevel: 100, mood: "...", mode: "face|calendar" }
-        API->>API: ApiKeyAuthFilter validates X-Api-Key
-        API->>DS: HeartbeatAsync(id, dto)
-        DS->>DB: UPDATE Device SET BatteryLevel, Mood, Mode, LastSeen = UtcNow, IsOnline = true
-        DB-->>DS: Saved
-        API-->>ESP32: 200 OK { message: "Heartbeat received.", deviceId, lastSeen }
+        Note right of ESP32: { batteryLevel, mood, mode }
+        API->>API: Validate API key
+        API->>DB: Update device: LastSeen, batteryLevel, mood, mode
+        API-->>ESP32: 200 OK
     end
 
-    REACT->>API: GET /api/devices/{id}/status (JWT)
-    API->>DS: GetStatusAsync(id)
-    DS->>DB: SELECT Device WHERE Id = {id}
-    DB-->>DS: Device row
-    DS->>DS: IsOnline = LastSeen > UtcNow - OfflineAfterMinutes (2 min)
-    DS->>DS: MinutesSinceLastSeen = (UtcNow - LastSeen).TotalMinutes
-    API-->>REACT: 200 OK { isOnline, statusText, batteryLevel, mood, mode, lastSeen, minutesSinceLastSeen }
+    React->>API: GET /api/devices/{id}/status (JWT)
+    API->>DB: Read device row
+    API->>API: IsOnline = LastSeen within last 2 minutes
+    API-->>React: { isOnline, batteryLevel, mood, mode, minutesSinceLastSeen }
 ```
 
 ---
 
 ## Notes
 
-| Topic | Detail |
-|---|---|
-| Google OAuth2 | One-time manual browser login required on first run. Token is cached locally in the `Secrets/` folder. |
-| Automatic sync interval | 5 minutes — first sync occurs 5 minutes after backend startup |
-| Manual sync | `POST /api/googlecalendar/sync` (JWT) — runs the same full-replace sync immediately |
-| Full-Replace pattern | All `CalendarEvents` are deleted and re-inserted on every sync. No upsert/merge. |
-| Extra calendars | Additional calendar IDs (e.g. company ICS subscriptions) are configured in `appsettings.json → GoogleCalendar:ExtraCalendarIds` |
-| Now / Next nullability | `now` and `next` in the response can be `null` if no matching event exists |
-| Google API access scope | Read-only (`CalendarService.Scope.CalendarReadonly`) — no write access to Google Calendar |
-| ESP32 never calls Google | The ESP32 only calls the local backend. All Google Calendar access goes through the backend. |
-| React and X-Api-Key | The React Dashboard calls `/api/nownext` with `X-Api-Key`, not JWT — the endpoint is designed for device access |
-| Offline threshold | Configured in `appsettings.json → Device:OfflineAfterMinutes` (default: 2). Calculated at query time, not stored. |
+- Google OAuth2 login is required once on first backend startup — the token is cached locally
+- Calendar sync runs automatically every 5 minutes (first sync is 5 minutes after startup)
+- Full-Replace pattern: old local events are always deleted before inserting fresh ones
+- ESP32 authenticates with `X-Api-Key` for all its endpoints (heartbeat and Now/Next)
+- React Dashboard uses JWT for all admin endpoints; it also uses `X-Api-Key` for `/api/nownext`
