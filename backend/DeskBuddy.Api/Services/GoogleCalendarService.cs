@@ -14,6 +14,10 @@ public class GoogleCalendarService : IGoogleCalendarService
     private readonly AppDbContext _db;
     private readonly IConfiguration _config;
 
+    // Cached once across all DI scopes — avoids re-authorizing on every background sync
+    private static CalendarService? _cachedService;
+    private static readonly SemaphoreSlim _lock = new(1, 1);
+
     public GoogleCalendarService(AppDbContext db, IConfiguration config)
     {
         _db = db;
@@ -88,22 +92,36 @@ public class GoogleCalendarService : IGoogleCalendarService
 
     private async Task<CalendarService> BuildServiceAsync()
     {
-        var secretsPath = _config["GoogleCalendar:CredentialsPath"]
-            ?? "Secrets/google-oauth-client.json";
+        if (_cachedService is not null) return _cachedService;
 
-        using var stream = new FileStream(secretsPath, FileMode.Open, FileAccess.Read);
-
-        var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
-            GoogleClientSecrets.FromStream(stream).Secrets,
-            new[] { CalendarService.Scope.CalendarReadonly },
-            "user",
-            CancellationToken.None
-        );
-
-        return new CalendarService(new BaseClientService.Initializer
+        await _lock.WaitAsync();
+        try
         {
-            HttpClientInitializer = credential,
-            ApplicationName = "DeskBuddy"
-        });
+            if (_cachedService is not null) return _cachedService;
+
+            var secretsPath = _config["GoogleCalendar:CredentialsPath"]
+                ?? "Secrets/google-oauth-client.json";
+
+            using var stream = new FileStream(secretsPath, FileMode.Open, FileAccess.Read);
+
+            var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                GoogleClientSecrets.FromStream(stream).Secrets,
+                new[] { CalendarService.Scope.CalendarReadonly },
+                "user",
+                CancellationToken.None
+            );
+
+            _cachedService = new CalendarService(new BaseClientService.Initializer
+            {
+                HttpClientInitializer = credential,
+                ApplicationName = "DeskBuddy"
+            });
+
+            return _cachedService;
+        }
+        finally
+        {
+            _lock.Release();
+        }
     }
 }

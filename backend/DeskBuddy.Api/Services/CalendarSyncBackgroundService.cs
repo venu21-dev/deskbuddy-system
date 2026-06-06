@@ -14,21 +14,29 @@ public class CalendarSyncBackgroundService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Run once shortly after startup, then repeat every 5 minutes
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+        await RunSyncAsync();
+
         while (!stoppingToken.IsCancellationRequested)
         {
             await Task.Delay(_interval, stoppingToken);
+            await RunSyncAsync();
+        }
+    }
 
-            try
-            {
-                using var scope = _scopeFactory.CreateScope();
-                var service = scope.ServiceProvider.GetRequiredService<IGoogleCalendarService>();
-                await service.SyncToDbAsync();
-                _logger.LogInformation("Calendar sync completed at {Time}", DateTime.UtcNow);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Calendar sync failed: {Message}", ex.Message);
-            }
+    private async Task RunSyncAsync()
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IGoogleCalendarService>();
+            await service.SyncToDbAsync();
+            _logger.LogInformation("Calendar sync completed at {Time}", DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Calendar sync failed");
         }
     }
 }
